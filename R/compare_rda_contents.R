@@ -107,11 +107,28 @@ compare_rda_contents<-function(path1,path2,numerical_tolerance=0,verbose=TRUE,ex
         {
             
             v2=get(varname,envir=e2)
-            colnames_identical=all(colnames(v1)==colnames(v2))
-            if(!colnames_identical)
+            listing_colnames_1 = colnames(v1)
+            listing_colnames_2 = colnames(v2)
+            # Exclude excluded columns
+            listing_colnames_1=listing_colnames_1[
+                !(paste(varname,listing_colnames_1,sep="/") %in% exclude_variables )]
+            listing_colnames_2=listing_colnames_2[
+                    !(paste(varname,listing_colnames_2,sep="/") %in% exclude_variables )]
+                
+            
+            if(length(listing_colnames_1)!=length(listing_colnames_2))
             {
                 all_comparisons_succesful=FALSE
+                colnames_identical=FALSE
+            } else {
+                colnames_identical=all(listing_colnames_1==listing_colnames_2)
+                if(!colnames_identical)
+                {
+                    all_comparisons_succesful=FALSE
+                }
             }
+            
+            
             if(verbose)
             {
                 cat(paste("\n\t\tComparing variable ",varname,sep=""))
