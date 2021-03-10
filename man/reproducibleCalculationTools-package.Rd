@@ -6,7 +6,7 @@
 reproducibleCalculationTools
 }
 \description{
-Provides utilities to compare subsequent data evaluations. At present, this involves \link{compare_rda_contents}, a function to compare the contents of rda files.
+Provides utilities to compare subsequent data evaluations. At present, this involves \link{compare_rda_contents}, a function to compare the contents of rda files, and \link{value_comparison}, to compare individual variables.
 }
 
 \author{
