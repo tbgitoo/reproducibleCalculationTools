@@ -20,7 +20,7 @@ Path to the first R-Data file (a .rda or .RData file that can be opened with \li
 
  \item{relative_numerical_tolerance}{Allow for some numerical tolerance. This is the relative deviation, as compared to the mean value of two corresponding entries}
 \item{verbose}{Should the function output what it is doing or remain silent}
-\item{exclude_variables}{Variables that should be excluded from comparison, for example locally varying access paths or randomly drawn variables. It is also possible to use a syntax of the type "variable/column" to exclude individual columns}
+\item{exclude_variables}{Variables that should be excluded from comparison, for example locally varying access paths or randomly drawn variables. It is also possible to use a syntax of the type "variable/column" to exclude individual columns for variables that do have column names such as \link{data.frame} variables.}
 }
 
 \value{
