@@ -1,4 +1,4 @@
-compare_rda_contents<-function(path1,path2,relative_numerical_tolerance=0,verbose=TRUE,exclude_variables=vector(mode="character",length=0)){
+compare_rda_contents<-function(path1,path2,numerical_tolerance=0,verbose=TRUE,exclude_variables=vector(mode="character",length=0),relative_tolerance_evaluation=FALSE){
     if(!file.exists(path1))
     {
         if(verbose){cat(paste("\n\tFile ",path1," does not exist",sep=""))}
@@ -9,6 +9,10 @@ compare_rda_contents<-function(path1,path2,relative_numerical_tolerance=0,verbos
         if(verbose){cat(paste("\n\tFile ",path2," does not exist",sep=""))}
         return(FALSE)
     }
+    if(verbose & length(exclude_variables)>0)
+    {
+        cat("Excluded from comparison: ",exclude_variables,"\n")
+    }
     e1=new.env()
     e2=new.env()
     load(path1,envir=e1)
@@ -16,15 +20,51 @@ compare_rda_contents<-function(path1,path2,relative_numerical_tolerance=0,verbos
     # \nCompare the file contents
     if(verbose){
         
+        cat("\tComparing data file contents by number of variables\n")
+        cat("\tSame number of non-excluded variables?\n")
+    }
+    
+    listing_1 = ls(e1)
+    listing_1 = listing_1[!(listing_1 %in% exclude_variables)]
+    
+    listing_2 = ls(e2)
+    listing_2 = listing_2[!(listing_2 %in% exclude_variables)]
+    
+    
+    same_number_of_variables = (length(listing_1)==length(listing_2))
+    
+    if(verbose){
+        cat("\t\t")
+        print(same_number_of_variables)
+    }
+    
+    if(!same_number_of_variables)
+    {
+        return(FALSE)
+    }
+    
+    
+    if(verbose){
+        
         cat("\tComparing data file contents by variable names\n")
         cat("\tAll variable names identical?\n")
     }
-    variables_identical = (all(sort(ls(e1))==sort(ls(e2))))
-    if(verbose)
+    
+    variables_identical=(all(sort(listing_1)==sort(listing_2)))
+    
+    if(variables_identical)
     {
-        cat("\t\t")
-        print(variables_identical)
+        
+        if(verbose)
+        {
+            cat("\t\t")
+            print(variables_identical)
+        }
+        
     }
+    
+    
+    
     
     
     if(!variables_identical)
@@ -117,9 +157,12 @@ compare_rda_contents<-function(path1,path2,relative_numerical_tolerance=0,verbos
     
     
     cat("\n\tAre all the values in the variables the same?")
-    if(relative_numerical_tolerance>0){
-        cat(paste("\n\t\t(Relative numerical tolerance ",relative_numerical_tolerance,")",sep=""))
-        
+    if(numerical_tolerance>0){
+        cat(paste("\n\t\t(Numerical tolerance ",numerical_tolerance,")",sep=""))
+        if(relative_tolerance_evaluation)
+        {
+            cat(" - relative to mean of absolute values ")
+        }
     }
     for(varname in varnames)
     {
@@ -138,7 +181,8 @@ compare_rda_contents<-function(path1,path2,relative_numerical_tolerance=0,verbos
                 
             }
             
-            comparison_OK=value_comparison(v1,v2,verbose=verbose,relative_numerical_tolerance=relative_numerical_tolerance)
+            comparison_OK=value_comparison(v1,v2,verbose=verbose,
+            numerical_tolerance=numerical_tolerance,relative_tolerance_evaluation=relative_tolerance_evaluation)
             
             if(!comparison_OK) { all_comparisons_succesful=FALSE}
             
@@ -157,7 +201,8 @@ compare_rda_contents<-function(path1,path2,relative_numerical_tolerance=0,verbos
                 list_OK=TRUE
                 for(index in 1:length(v1))
                 {
-                    if(!value_comparison(v1[[index]],v2[[index]],verbose=TRUE,relative_numerical_tolerance=relative_numerical_tolerance))
+                    if(!value_comparison(v1[[index]],v2[[index]],verbose=TRUE,numerical_tolerance=numerical_tolerance,
+                    relative_tolerance_evaluation=relative_tolerance_evaluation))
                     {
                         list_OK=FALSE
                     }
@@ -179,7 +224,7 @@ compare_rda_contents<-function(path1,path2,relative_numerical_tolerance=0,verbos
 }
 
 
-value_comparison<-function(v1,v2,verbose=TRUE,relative_numerical_tolerance=0)
+value_comparison<-function(v1,v2,verbose=TRUE,numerical_tolerance=0,relative_tolerance_evaluation=FALSE)
 {
     # check dimensionality, must be the same (or possibly null)
     if(!all(dim(v1)==dim(v2)))
@@ -244,14 +289,18 @@ value_comparison<-function(v1,v2,verbose=TRUE,relative_numerical_tolerance=0)
                     remaining_v2=remaining_v2[not_identical]
                     
                     
-                    if(relative_numerical_tolerance>0)
+                    if(numerical_tolerance>0)
                     {
                         # The values are numeric and so no conversion is needed
                         if(is.numeric(remaining_v1) & is.numeric(remaining_v2) )
                         {
-                            mean_val=(remaining_v1+remaining_v2)/2
+                            mean_val=(abs(remaining_v1)+abs(remaining_v2))/2
                             deviation=abs(remaining_v2-remaining_v1)
-                            if(any(deviation>relative_numerical_tolerance))
+                            if(relative_tolerance_evaluation)
+                            {
+                                deviation=deviation/mean_val
+                            }
+                            if(any(deviation>numerical_tolerance))
                             {
                                 if(verbose){cat(paste(": Numerical tolerance exceeded  (column ", colIndex," )",sep="")) }
                                 return(FALSE)
@@ -262,9 +311,13 @@ value_comparison<-function(v1,v2,verbose=TRUE,relative_numerical_tolerance=0)
                             {
                                 remaining_v1=as.numeric(remaining_v1)
                                 remaining_v2=as.numeric(remaining_v2)
-                                mean_val=(remaining_v1+remaining_v2)/2
+                                mean_val=(abs(remaining_v1)+abs(remaining_v2))/2
                                 deviation=abs(remaining_v2-remaining_v1)
-                                if(any(deviation>relative_numerical_tolerance))
+                                if(relative_tolerance_evaluation)
+                                {
+                                    deviation=deviation/mean_val
+                                }
+                                if(any(deviation>numerical_tolerance))
                                 {
                                     if(verbose){cat(paste(": Numerical tolerance exceeded  (column ", colIndex," )",sep="")) }
                                     return(FALSE)
@@ -316,15 +369,25 @@ value_comparison<-function(v1,v2,verbose=TRUE,relative_numerical_tolerance=0)
                 # This is not a reading problem, but rather a true numerical problem. In least squares fitting, particulary, this can be an issue since the implementations are not necessary exactly the same
                 
                 # In this case, it makes sense to allow for some relative numerical tolerance
-                if(relative_numerical_tolerance>0)
+                if(numerical_tolerance>0)
                 {
-                    numerical1=as.numeric(problematic_v1[!is.na(problematic_v1)])
-                    numerical2=as.numeric(problematic_v2[!is.na(problematic_v2)])
-                    mean_val=(numerical1+numerical2)/2
-                    deviation=abs(numerical2-numerical1)
-                    if(all(deviation<relative_numerical_tolerance))
+                    numerical1=suppressWarnings(as.numeric(problematic_v1[!is.na(problematic_v1)]))
+                    numerical2=suppressWarnings(as.numeric(problematic_v2[!is.na(problematic_v2)]))
+                    if(any(is.na(numerical1)) | any(is.na(numerical2)))
                     {
-                        comparison_OK=TRUE
+                        cat(": Numerical comparison not applicable to all values with differences")
+                    } else {
+                        mean_val=(abs(numerical1)+abs(numerical2))/2
+                        deviation=abs(numerical2-numerical1)
+                        if(relative_tolerance_evaluation)
+                        {
+                            deviation=deviation/mean_val
+                        }
+                        if(all(deviation<numerical_tolerance))
+                        {
+                            comparison_OK=TRUE
+                        }
+                        
                     }
                     
                 }
