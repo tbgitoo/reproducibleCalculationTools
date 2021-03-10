@@ -21,6 +21,7 @@ Path to the first R-Data file (a .rda or .RData file that can be opened with \li
  \item{numerical_tolerance}{Allow for some numerical tolerance. This is the relative deviation, as compared to the mean value of two corresponding entries}
 \item{verbose}{Should the function output what it is doing or remain silent}
 \item{exclude_variables}{Variables that should be excluded from comparison, for example locally varying access paths or randomly drawn variables. It is also possible to use a syntax of the type "variable/column" to exclude individual columns for variables that do have column names such as \link{data.frame} variables.}
+\item{relative_tolerance_evaluation}{Should numerical precision in comparison of corresponding values be check at the level of the absolute differences (the default) or relative to the mean absolute value of the two numbers being compared (pass \code{TRUE}) for this).}
 }
 
 \value{
@@ -28,7 +29,7 @@ Path to the first R-Data file (a .rda or .RData file that can be opened with \li
 }
 
 \details{The function checks that the two R-Data files contain objects having the same name, and also performs some checks on the objects contained. These checks include whether variables (functions are not analyzed) have the same column names, and whether the values are identical (to within \code{numerical_tolerance} if \code{numerical_tolerance>0}). The function is meant to validate equality, so it doesn't deal with differently structured variables, and also not with functions. Lists are compared element by element. \cr\cr
-Regarding numerical precision, this can be either checked on an absolute level (the default, \code{relative_tolerance_evaluation}) or relative to the mean absolute value of pairs of numbers being compared (when passing \code{relative_tolerance_evaluation=TRUE}). The function also attempts to apply comparison within numerical precision by conversion of strings to numerical values, but not within \link{data.frame} columns that explicitly have string column type. \cr\cr
+Regarding numerical precision, this can be either checked on an absolute level (the default, \code{relative_tolerance_evaluation}) or relative to the mean absolute value of pairs of numbers being compared (when passing \code{relative_tolerance_evaluation=TRUE}). The function also attempts to apply comparison within numerical precision by conversion of strings to numerical values, but not within \link{data.frame} columns that explicitly have string column type as this is considered to signal maintenance of string type. \cr\cr
 The reason for implementation of explicit exclusion mechanism in our case is that when running the same scripts on different operating systems or computers, most values remain very close or identical, but there are a number of operating-system or system specific values, typically file paths, that are not generally matching when comparing calculation output. This information is valuable and often necessary for processing, but needs to be excluded from comparison when assessing numerical reproducibility.}
 
 
@@ -132,6 +133,13 @@ path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTo
 path_extra_column_dataframe = system.file("extra_column_in_dataframe.rda",package="reproducibleCalculationTools")
 comparison_extra_column_in_dataframe=compare_rda_contents(path_base,path_extra_column_dataframe,exclude_variables="aDataframe/extracolumn")
 comparison_extra_column_in_dataframe # Anticipated: TRUE
+
+# Example 14: rda file 2 has the number variable "aNumber" replaced by corresponding string (i.e. "5.3942" instead of 5.3942)
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")
+path_number_as_string = system.file("number_as_string.rda",package="reproducibleCalculationTools")
+comparison_number_as_string=compare_rda_contents(path_base,path_number_as_string)
+comparison_number_as_string # Anticipated: TRUE
+
 
 
 }

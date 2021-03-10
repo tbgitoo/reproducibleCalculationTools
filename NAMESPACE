@@ -1,1 +1,1 @@
-export("compare_rda_contents")
+export("compare_rda_contents","value_comparison")

@@ -1,271 +1,3 @@
-p_matrix
-get_p_value_estimate(x,T0,T,N_per_condition)
-get_p_value_estimate<-function(x,T0,T,N_per_condition)#
-{#
-#
-theory_reaction_rate = matrix(nrow=length(x),ncol=length(T))#
-# In reality, we would dispose of measured values with variability rather than theoretical values. Let's say we dispose of 15 values for theoretical value#
-measured=data.frame(T=vector(mode="numeric",length=0),x=vector(mode="numeric",length=0),measured_reaction_rate=vector(mode="numeric",length=0))#
-for(ind_x in 1:length(x))#
-{#
-	for(ind_T in 1:length(T))#
-	{#
-		theory_reaction_rate[ind_x,ind_T]=50*exp(-T0[ind_x]/T[ind_T])#
-		# Let's say we have normal distribution at log scale#
-		# Generate a random sample with 15 values#
-		measurements_random =exp(log(theory_reaction_rate[ind_x,ind_T])+rnorm(N_per_condition))#
-		measured=rbind(measured,data.frame(T=T[ind_T],x=x[ind_x],measured_reaction_rate=measurements_random))#
-	}#
-}#
-#
-# For the evaluation, let's first evaluate things globally. Let's say we are interested in knowing for each catalyst concentration x the temperature where the reaction rate is half-maximal. We estimate the maximum reaction rate at the highest temperature:#
-#
-v_max = aggregate ( measured_reaction_rate ~ x, measured[measured$T==max(measured$T),],FUN=median,na.rm=TRUE)#
-# General aggregation per x and T#
-v = aggregate(measured_reaction_rate ~ x+T,measured,FUN=median,na.rm=TRUE)#
-overall_summary=estimate_half_temperature_at_half_maximal_rate(v)#
-pvals=vector(length=2, mode="numeric")#
-#
-names(pvals)=c("lm","lm bootstrapping")#
-#
-pvals["lm"]=coefficients(summary(lm(log(half_temperature)~x, overall_summary)))["x","Pr(>|t|)"]#
-#
-n_agg = 3 # Let's generate three subsampling plots#
-N_total = n_agg*100 # 100 blocks#
-n_to_sample = round(N_per_condition/n_agg) # Nominal coverage of 1#
-#
-y=matrix(nrow=length(x),ncol=N_total)#
-#
-for(ind_bootstrap in 1:N_total)#
-{#
-#
-measured_subsampled=measured[FALSE,]#
-#
-for(ind_x in 1:length(x))#
-{#
-	for(ind_T in 1:length(T))#
-	{#
-		to_subsample = measured[measured$T==T[ind_T] & measured$x==x[ind_x],]#
-		measured_subsampled=rbind(measured_subsampled,to_subsample[sample(dim(to_subsample)[1], n_to_sample),])#
-	}#
-}#
-#
-v_subsampled=aggregate(measured_reaction_rate ~ x+T,measured_subsampled,FUN=median,na.rm=TRUE)#
-#
-half_temperature_estimate=estimate_half_temperature_at_half_maximal_rate(v_subsampled)#
-#
-y[match(half_temperature_estimate$x,x),ind_bootstrap]=half_temperature_estimate$half_temperature#
-#
-}#
-#
-# x is now the regressor values (catalyst concentrations) as wanted#
-#
-pvals["lm bootstrapping"]=linear_regression_p_bootstrap(x,log(y),n_agg=n_agg,na.rm=TRUE)#
-#
-return(pvals)#
-#
-}
-get_p_value_estimate(x,T0,T,N_per_condition)
-# First, the case with a known effect#
-x=c(0,2,4) # Concentrations catalyst#
-T0=exp(x) # Let's say, this is an exponential dependency#
-T=c(1,3,10,30,100,300,1000) # Known temperatures#
-N_per_condition=15#
-N_simulation=20#
-pfirst=get_p_value_estimate(x,T0,T,N_per_condition)
-pfirst
-pfirst=get_p_value_estimate(x,T0,T,N_per_condition)#
-#
-p_matrix=matrix(ncol=length(pfirst),nrow=N_simulation)#
-#
-p_matrix[1,]=pfirst#
-#
-colnames(p_matrix)=names(pfirst)#
-#
-for(ind in 2:(dim(p_matrix)[1]))#
-{#
-	p_matrix[ind,]=get_p_value_estimate(x,T0,T,N_per_condition)#
-	cat(paste("Run ", ind, "\n", sep=""))#
-#
-}
-p_matrix
-power=pfirst#
-for(theApproach in names(power))#
-{#
-	current_data=p_matrix[,theApproach]#
-	current_data=current_data[!is.na(current_data)]#
-	power[theApproach]=sum(current_data<=0.05)/(length(current_data))#
-}
-power
-# First, the case with a known effect#
-x=c(0,2,4) # Concentrations catalyst#
-T0=exp(x) # Let's say, this is an exponential dependency#
-T=c(1,3,10,30,100,300,1000) # Known temperatures#
-N_per_condition=15#
-N_simulation=100#
-pfirst=get_p_value_estimate(x,T0,T,N_per_condition)#
-#
-p_matrix=matrix(ncol=length(pfirst),nrow=N_simulation)#
-#
-p_matrix[1,]=pfirst#
-#
-colnames(p_matrix)=names(pfirst)#
-#
-for(ind in 2:(dim(p_matrix)[1]))#
-{#
-	p_matrix[ind,]=get_p_value_estimate(x,T0,T,N_per_condition)#
-	cat(paste("Run ", ind, "\n", sep=""))#
-#
-}#
-power=pfirst#
-for(theApproach in names(power))#
-{#
-	current_data=p_matrix[,theApproach]#
-	current_data=current_data[!is.na(current_data)]#
-	power[theApproach]=sum(current_data<=0.05)/(length(current_data))#
-}#
-# Second, false positives#
-T0=exp(0*x) # No effect of the catalyst#
-pfirst=get_p_value_estimate(x,T0,T,N_per_condition)#
-#
-p_matrix_control=matrix(ncol=length(pfirst),nrow=N_simulation)#
-#
-p_matrix_control[1,]=pfirst#
-#
-colnames(p_matrix_control)=names(pfirst)#
-#
-for(ind in 2:(dim(p_matrix_control)[1]))#
-{#
-	p_matrix_control[ind,]=get_p_value_estimate(x,T0,T,N_per_condition)#
-	cat(paste("Run ", ind, "\n", sep=""))#
-#
-}#
-false_positives=pfirst#
-for(theApproach in names(false_positives))#
-{#
-	current_data=p_matrix_control[,theApproach]#
-	current_data=current_data[!is.na(current_data)]#
-	false_positives[theApproach]=sum(current_data<=0.05)/(length(current_data))#
-}#
-#
-for_barplot=matrix(nrow=2,ncol=length(false_positives),data=c(false_positives, power),byrow=TRUE)#
-#
-rownames(for_barplot)=c("False positives (alpha)", "True positives (1-beta, power)")#
-colnames(for_barplot)=names(false_positives)#
-#
-barplot(for_barplot,beside=TRUE,legend=TRUE)
-for_barplot
-rm(list=ls())
-load("~/Downloads/overview_simulation_jumps_corrected.rda")
-ls()
-colnames(overview_simulation)
-to_look_for=overview_simulation$packing_fraction==1.5 & overview_simulation$Young_modulus_spheres=1e4
-to_look_for=overview_simulation$packing_fraction==1.5 & overview_simulation$Young_modulus_spheres==1e4
-sum(to_look_for)
-to_look_for=overview_simulation$packing_fraction==1.5 & overview_simulation$Young_modulus_spheres==1e4 & overview_simulation$Strain_amplitude==0.1
-sum(to_look_for)
-to_look_for=overview_simulation$packing_fraction==1.5 & overview_simulation$Young_modulus_spheres==1e4 & overview_simulation$Strain_amplitude==0.1 & overview_simulation $do_permanent_links==1
-sum(to_look_for)
-to_look_for=overview_simulation$packing_fraction==1.5 & overview_simulation$Young_modulus_spheres==1e4 & overview_simulation$Strain_amplitude==0.1 & overview_simulation $do_permanent_links==1 & overview_simulation$remove_link_fraction==0.4
-sum(to_look_for)
-to_look_for=overview_simulation$packing_fraction==1.5 & overview_simulation$Young_modulus_spheres==1e4 & overview_simulation$Strain_amplitude==0.1 & overview_simulation $do_permanent_links==1 & overview_simulation$remove_link_fraction==0.4 & overview_simulation$cut_lines==5
-sum(to_look_for)
-overview_simulation[to_look_for,]
-to_look_for=overview_simulation$packing_fraction==1.5 & overview_simulation$Young_modulus_spheres==1e4 & overview_simulation$Strain_amplitude==0.1 & overview_simulation $do_permanent_links==1 & overview_simulation$remove_link_fraction==0.4 & overview_simulation$cut_lines==5 & overview_simulation$Friction_coefficient==0.1
-sum(to_look_for)
-overview_simulation[to_look_for,]
-to_look_for=overview_simulation$packing_fraction==1.5 & overview_simulation$Young_modulus_spheres==1e4 & overview_simulation$Strain_amplitude==0.1 & overview_simulation $do_permanent_links==1 & overview_simulation$remove_link_fraction==0.6 & overview_simulation$cut_lines==5 & overview_simulation$Friction_coefficient==0.1
-sum(to_look_for)
-to_look_for=overview_simulation$packing_fraction==1.5 & overview_simulation$Young_modulus_spheres==1e4 & overview_simulation$Strain_amplitude==0.1 & overview_simulation $do_permanent_links==1 & overview_simulation$remove_link_fraction==0.5 & overview_simulation$cut_lines==5 & overview_simulation$Friction_coefficient==0.1
-sum(to_look_for)
-unique(overview_simulation$remove_link_fraction)
-library(particleShearEvaluation)
-strain=c(0.01,0.03,0.1,0.3,1,3,10)#
-Gprime=c(1000,950,700,300,100,20,10)#
-Gprimeprime=c(50,60,80,100,120,110,50)#
-get_yield_point(strain,Gprime,Gprimeprime)
-strain=c(0.01,0.03,0.1,0.3,1,3,10)#
-Gprime=c(1000,950,700,300,100,20,10)#
-Gprimeprime=c(50,60,80,100,120,110,50)#
-plot(Gprime ~ strain)#
-lines(Gprimeprime ~ strain)#
-get_yield_point(strain,Gprime,Gprimeprime)
-strain=c(0.01,0.03,0.1,0.3,1,3,10)#
-Gprime=c(1000,950,700,300,100,20,10)#
-Gprimeprime=c(50,60,80,100,120,110,50)#
-plot(Gprime ~ strain)#
-lines(Gprimeprime ~ strain)#
-lines(rep(get_yield_point(strain,Gprime,Gprimeprime),2),c(0,max(Gprime)))
-strain=c(0.01,0.03,0.1,0.3,1,3,10)#
-Gprime=c(1000,950,700,300,100,20,10)#
-Gprimeprime=c(50,60,80,100,120,110,50)#
-plot(Gprime ~ strain,type="b")#
-lines(Gprimeprime ~ strain)#
-lines(rep(get_yield_point(strain,Gprime,Gprimeprime),2),c(0,max(Gprime)))
-strain=c(0.01,0.03,0.1,0.3,1,3,10)#
-Gprime=c(1000,950,700,300,100,20,10)#
-Gprimeprime=c(50,60,80,100,120,110,50)#
-plot(Gprime ~ strain,type="b")#
-lines(Gprimeprime ~ strain)#
-lines(rep(get_yield_point(strain,Gprime,Gprimeprime),2),c(0,max(Gprime)),lty=2)
-strain=c(0.01,0.03,0.1,0.3,1,3,10)#
-Gprime=c(1000,950,700,300,100,20,10)#
-Gprimeprime=c(50,60,80,100,120,110,50)#
-plot(Gprime ~ strain,type="b",ylab=c("G' and G''"))#
-lines(Gprimeprime ~ strain)#
-lines(rep(get_yield_point(strain,Gprime,Gprimeprime),2),c(0,max(Gprime)),lty=2)
-strain=c(0.01,0.03,0.1,0.3,1,3,10)#
-Gprime=c(1000,950,700,300,100,20,10)#
-Gprimeprime=c(50,60,80,100,120,110,50)#
-plot(Gprime ~ strain,type="b",ylab=c("G' and G''"))#
-lines(Gprimeprime ~ strain)#
-lines(rep(get_yield_point(strain,Gprime,Gprimeprime),2),c(0,max(Gprime)),lty=2)#
-get_yield_point(strain,Gprime,Gprimeprime)
-system
-system.path
-help(system.file)
-system.file("full_python_simulation_output_example.txt",package="particleShearEvaluation")
-4*60/75*1000
-3*60/75*1000
-read_general_data_from_file{system.file("full_python_simulation_output_example.txt",package="particleShearEvaluation")}
-read_general_data_from_file(system.file("full_python_simulation_output_example.txt",package="particleShearEvaluation"))
-read_general_data_from_file
-general_data=read_general_data_from_file(system.file("full_python_simulation_output_example.txt",package="particleShearEvaluation"))
-general_data
-general_data=read_general_data_from_file(system.file("full_python_simulation_output_example.txt",package="particleShearEvaluation"))#
-general_data[71:78]
-stress_curve=read_stress_curve_from_file(system.file("full_python_simulation_output_example.txt",package="particleShearEvaluation"))
-colnames(stress_curve)
-plot(strain ~ t, stress_curve)
-stress_curve=read_stress_curve_from_file(system.file("full_python_simulation_output_example.txt",package="particleShearEvaluation"))#
-plot(strain ~ t, stress_curve,type="l",xlab="t[s]",ylab="strain [-]")
-plot(shear_stress_from_internal_stress_tensor ~ t, stress_curve,type="l")
-plot(strain ~ t, stress_curve,type="l",xlab="t[s]",ylab="strain [-]")#
-lines(stress_curve$t, stress_curve$shear_stress_from_internal_stress_tensor/1000,type="l",col="red")
-plot(strain ~ t, stress_curve,type="l",xlab="t[s]",ylab="strain [-], stress[kPa]")#
-lines(stress_curve$t, stress_curve$shear_stress_from_internal_stress_tensor/1000,type="l",col="red")
-plot(strain ~ t, stress_curve,type="l",xlab="t[s]",ylab="strain [-], stress[kPa]")#
-lines(stress_curve$t, stress_curve$shear_stress_from_internal_stress_tensor/1000,type="l",col="red")#
-legend("bottomleft",legend=c("strain","stress"),lty=c(1,1),col=c("black","red"))
-getwd()
-library(particleShearEvaluation)
-system.file(".",package="particleShearEvaluation")
-system.file("",package="particleShearEvaluation")
-nchar("")
-nchar("/")
-help(substr)
-destination_root="/Library/Frameworks/R.framework/Versions/4.0/Resources/library/particleShearEvaluation/"
-destination_root
-nchar(destination_root)
-substr(destination_root,nchar(destination_root)-1,nchar(destination_root) )
-substr(destination_root,nchar(destination_root),nchar(destination_root)+1 )
-substr(destination_root,nchar(destination_root),nchar(destination_root) )
-substr(destination_root,nchar(destination_root),nchar(destination_root)-1 )
-substr(destination_root,nchar(destination_root)-1,nchar(destination_root) )
-substr(destination_root,nchar(destination_root),nchar(destination_root) )
-help(substr)
-substr(destination_root,nchar(destination_root),nchar(destination_root))=="/"
-substr(destination_root,0,nchar(destination_root))
 substr(destination_root,0,nchar(destination_root)-1)
 path="/particleShearEvaluation"
 orign_root=""/Library/Frameworks/R.framework/Versions/4.0/Resources/library/"
@@ -895,12 +627,7 @@ aNumber
 load(path_different_number)
 aNumber
 library(reproducibleCalculationTools)
-#Example 6: rda file 2 has a different entry for a numerical variable, but allow for different levels of relative tolerance#
-path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
-path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
-comparison_with_different_number_large_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=0.2,relative_tolerance_evaluation=TRUE)#
-comparison_with_different_number_large_tolerance
-#Example 6: rda file 2 has a different entry for a numerical variable, but allow for different levels of relative tolerance#
+#Example 7: rda file 2 has a different entry for a numerical variable, but allow for different levels of relative tolerance#
 path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
 path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
 comparison_with_different_number_large_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=0.2,relative_tolerance_evaluation=TRUE)#
@@ -908,19 +635,391 @@ comparison_with_different_number_large_tolerance#
 #
 comparison_with_different_number_small_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
 comparison_with_different_number_small_tolerance
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string = system.file("different_string.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string)
+compare_rda_contents(path_base,path_different_string,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)
+class(2)
+class("string")
+v1="s"
+v2="t"
+value_comparison<-function(v1,v2,verbose=TRUE,numerical_tolerance=0,relative_tolerance_evaluation=FALSE)#
+{#
+    # check dimensionality, must be the same (or possibly null)#
+    if(!all(dim(v1)==dim(v2)))#
+    {#
+        if(verbose){cat(": unequal size")}#
+        return(FALSE)#
+    }#
+    # Check also the length in case it's vectors#
+    if(!(length(v1)==length(v2)))#
+    {#
+        if(verbose){cat(": unequal length")}#
+        return(FALSE)#
+    }#
+    # Either both, or none of the two variables should be NA at the same place#
+    if(any(xor(is.na(v1),is.na(v2))))#
+    {#
+        if(verbose){cat("Mismatch in NA elements") }#
+        return(FALSE)#
+    }#
+    comparison=(!is.na(v1) & v1==v2)|(is.na(v1) & is.na(v2))#
+    comparison_OK=all(comparison)#
+    # There are sometimes issues with numerical conversions in bulk comparison, so if there are problems, compare individually#
+    if(!comparison_OK)#
+    {#
+        # Special case: dataframes, these have different types#
+        if(class(v1)=="data.frame" & class(v2)=="data.frame")#
+        {#
+            for(colIndex in 1:(dim(v1)[2]))#
+            {#
+                remaining_v1 = v1[,colIndex]#
+                remaining_v2 = v2[,colIndex]#
+                # Mismatch in NA values#
+                if(any(xor(is.na(remaining_v1),is.na(remaining_v2))))#
+                {#
+                    if(verbose){cat(paste(": Not all NA values match (column ", colIndex," )",sep="")) }#
+                    return(FALSE)#
+                }#
+                remaining_v1=remaining_v1[!is.na(remaining_v1)]#
+                remaining_v2=remaining_v2[!is.na(remaining_v2)]#
+                # examine the critical cases that are not anyways identical#
+                # Test whether they are all the same numerically#
+                if(!all(remaining_v1==remaining_v2))#
+                {#
+                    not_identical=!(remaining_v1==remaining_v2)#
+                    remaining_v1=remaining_v1[not_identical]#
+                    remaining_v2=remaining_v2[not_identical]#
+                    if(numerical_tolerance>0)#
+                    {#
+                        # The values are numeric and so no conversion is needed#
+                        if(is.numeric(remaining_v1) & is.numeric(remaining_v2) )#
+                        {#
+                            mean_val=(abs(remaining_v1)+abs(remaining_v2))/2#
+                            deviation=abs(remaining_v2-remaining_v1)#
+                            if(relative_tolerance_evaluation)#
+                            {#
+                                deviation=deviation/mean_val#
+                            }#
+                            if(any(deviation>numerical_tolerance))#
+                            {#
+                                if(verbose){cat(paste(": Numerical tolerance exceeded  (column ", colIndex," )",sep="")) }#
+                                return(FALSE)#
+                            }#
+                        } else {#
+                            # Not numeric, but is conversion possible?#
+                            if(suppressWarnings(!any(is.na(as.numeric(remaining_v1)))) & suppressWarnings(!any(is.na(as.numeric(remaining_v2)))))#
+                            {#
+                                remaining_v1=as.numeric(remaining_v1)#
+                                remaining_v2=as.numeric(remaining_v2)#
+                                mean_val=(abs(remaining_v1)+abs(remaining_v2))/2#
+                                deviation=abs(remaining_v2-remaining_v1)#
+                                if(relative_tolerance_evaluation)#
+                                {#
+                                    deviation=deviation/mean_val#
+                                }#
+                                if(any(deviation>numerical_tolerance))#
+                                {#
+                                    if(verbose){cat(paste(": Numerical tolerance exceeded  (column ", colIndex," )",sep="")) }#
+                                    return(FALSE)#
+                                }#
+                            } else {#
+                                # We can't convert all values that were unequal, and so there must be an issue#
+                                if(verbose){cat(paste(": Column with unequal values is not numeric, tolerance cannot be applied  (column ", colIndex," )",sep="")) }#
+                                return(FALSE)#
+                            }#
+                        }#
+                    } else {#
+                        if(verbose){cat(paste(": Numerical tolerance 0, but non-identical values  (column ", colIndex," )",sep="")) }#
+                        return(FALSE)#
+                    }#
+                }#
+            }#
+            if(verbose){cat(paste(": ",TRUE,sep=""))}#
+            return(TRUE)#
+        }#
+        problematic_v1=v1[!comparison]#
+        problematic_v2=v2[!comparison]#
+        # Check the the NA entries are the same#
+        NA_OK=all(is.na(problematic_v1[is.na(problematic_v2)])) &#
+        all(is.na(problematic_v2[is.na(problematic_v1)]))#
+        if(NA_OK){#
+            # Compare the potentially problematic values directly (to exclude minor issues with numerical imprecision)#
+            values_OK=all(problematic_v1[!is.na(problematic_v1)]==problematic_v2[!is.na(problematic_v2)])#
+            if(values_OK)#
+            {#
+                comparison_OK=TRUE#
+            } else {#
+                # This is not a reading problem, but rather a true numerical problem. In least squares fitting, particulary, this can be an issue since the implementations are not necessary exactly the same#
+                # In this case, it makes sense to allow for some relative numerical tolerance#
+                if(numerical_tolerance>0)#
+                {#
+                    numerical1=as.numeric(problematic_v1[!is.na(problematic_v1)])#
+                    numerical2=as.numeric(problematic_v2[!is.na(problematic_v2)])#
+                    mean_val=(abs(numerical1)+abs(numerical2))/2#
+                    deviation=abs(numerical2-numerical1)#
+                    if(relative_tolerance_evaluation)#
+                    {#
+                        deviation=deviation/mean_val#
+                    }#
+                    if(all(deviation<numerical_tolerance))#
+                    {#
+                        comparison_OK=TRUE#
+                    }#
+                }#
+            }#
+        }#
+    }#
+    if(verbose){cat(paste(": ",comparison_OK,sep=""))}#
+    return(comparison_OK)#
+}
+v1
+v2
+value_comparison(v1,v2)
+value_comparison(v1,v2,numerical_tolerance=0.1)
+numerical_tolerance=0.1
+problematic_v1=v1
+problematic_v2=v2
+NA_OK=all(is.na(problematic_v1[is.na(problematic_v2)])) &#
+        all(is.na(problematic_v2[is.na(problematic_v1)]))
+NA_OK
+values_OK=all(problematic_v1[!is.na(problematic_v1)]==problematic_v2[!is.na(problematic_v2)])
+values_OK
+as.numeric(problematic_v1[!is.na(problematic_v1)])
+suppressWarnings(as.numeric(problematic_v1[!is.na(problematic_v1)]))
+is.na(suppressWarnings(as.numeric(problematic_v1[!is.na(problematic_v1)])))
+library(reproducibleCalculationTools)
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string = system.file("different_string.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string)#
+comparison_with_different_string
+# The string cannot be converted to numerical but this shouldn't interfere#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_string
+# Example 9: rda file 2 has a different string value in its dataframe#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe)#
+comparison_with_different_string
+# The string cannot be converted to numerical but this shouldn't interfere#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_string
+load(path_base)
+aDataframe
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,exclude_variables="aDataframe/string_column")#
+comparison_with_different_string
+library(reproducibleCalculationTools)
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,exclude_variables="aDataframe/string_column")#
+comparison_with_different_string
+load(path_base)
+aDataframe
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,exclude_variables="aDataframe/number_column")#
+comparison_with_different_string
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_extra_column_dataframe = system.file("extra_column_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_extra_column_in_dataframe=compare_rda_contents(path_base,path_extra_column_dataframe)#
+comparison_extra_column_in_dataframe
+paste("j",c("a","b"))
+library(reproducibleCalculationTools)
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+identical_comparison=compare_rda_contents(path_base,path_base)#
+identical_comparison
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_one_more_variable = system.file("one_more_variable.rda",package="reproducibleCalculationTools")#
+comparison_with_one_more_variable=compare_rda_contents(path_base,path_one_more_variable)#
+comparison_with_one_more_variable
+# Example 3: Rda file 2 has one more variable, excluded during comparison#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_one_more_variable = system.file("one_more_variable.rda",package="reproducibleCalculationTools")#
+comparison_with_one_more_variable=compare_rda_contents(path_base,path_one_more_variable,exclude_variables="anotherNumber")#
+comparison_with_one_more_variable
+#Example 4: rda file 2 has a different entry for a numerical variable#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
+comparison_with_different_number=compare_rda_contents(path_base,path_different_number)#
+comparison_with_different_number
+#Example 5: rda file 2 has a different entry for a numerical variable, but allow for different levels of absolute tolerance#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
+comparison_with_different_number_large_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=0.7)#
+comparison_with_different_number_large_tolerance
+comparison_with_different_number_small_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=1e-10)#
+comparison_with_different_number_small_tolerance
+#Example 6: rda file 2 has a different entry for a numerical variable, but allow for different levels of relative tolerance#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
+comparison_with_different_number_large_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=0.2,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_number_large_tolerance
+comparison_with_different_number_small_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_number_small_tolerance
+#Example 7: rda file 2 has a different entry for a numerical variable, but allow for different levels of relative tolerance#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
+comparison_with_different_number_large_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=0.2,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_number_large_tolerance
+comparison_with_different_number_small_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_number_small_tolerance
+# Example 8: rda file 2 has a different string value#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string = system.file("different_string.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string)#
+comparison_with_different_string#
+# The string cannot be converted to numerical but this shouldn't interfere#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_string
+# Example 9: rda file 2 has a different string value in its dataframe example#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe)#
+comparison_with_different_string#
+# The string cannot be converted to numerical but this shouldn't interfere#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_string
+# Example 10: rda file 2 has a different string value in its dataframe example, but the column is explicitly excluded#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,exclude_variables="aDataframe/string_column")#
+comparison_with_different_string
+# Example 11: rda file 2 has a different string value in its dataframe example, exclusion of an unrelated column should not interfer with detection of difference#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,exclude_variables="aDataframe/number_column")#
+comparison_with_different_string
+# Example 12: rda file 2 has one more column in the dataframe#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_extra_column_dataframe = system.file("extra_column_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_extra_column_in_dataframe=compare_rda_contents(path_base,path_extra_column_dataframe)#
+comparison_extra_column_in_dataframe
 load(path_base)
 ls()
-aString
-aString="that not"
-save(file="different_string.rda",list=c("aDataframe","aNumber","aString"))
 aDataframe
+load(path_extra_column_dataframe)
+aDataframe
+# Example 13: rda file 2 has one more column in the dataframe, but this difference is explicitly excluded from comparison#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_extra_column_dataframe = system.file("extra_column_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_extra_column_in_dataframe=compare_rda_contents(path_base,path_extra_column_dataframe,exclude_variables="aDataframe/extracolumn")#
+comparison_extra_column_in_dataframe
+library(reproducibleCalculationTools)
+# Example 13: rda file 2 has one more column in the dataframe, but this difference is explicitly excluded from comparison#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_extra_column_dataframe = system.file("extra_column_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_extra_column_in_dataframe=compare_rda_contents(path_base,path_extra_column_dataframe,exclude_variables="aDataframe/extracolumn")#
+comparison_extra_column_in_dataframe
+# Example 12: rda file 2 has one more column in the dataframe#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_extra_column_dataframe = system.file("extra_column_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_extra_column_in_dataframe=compare_rda_contents(path_base,path_extra_column_dataframe)#
+comparison_extra_column_in_dataframe
+# Example 12: rda file 2 has one more column in the dataframe#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_extra_column_dataframe = system.file("extra_column_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_extra_column_in_dataframe=compare_rda_contents(path_base,path_extra_column_dataframe)#
+comparison_extra_column_in_dataframe # Anticipated: FALSE
+# Example 11: rda file 2 has a different string value in its dataframe example, exclusion of an unrelated column should not interfer with detection of difference#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,exclude_variables="aDataframe/number_column")#
+comparison_with_different_string
+# Example 10: rda file 2 has a different string value in its dataframe example, but the column is explicitly excluded#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,exclude_variables="aDataframe/string_column")#
+comparison_with_different_string  # Anticipated: TRUE
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe)#
+c
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string_dataframe = system.file("string_change_in_dataframe.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe)#
+comparison_with_different_string # Anticipated: FALSE
+# The string cannot be converted to numerical but this shouldn't interfere#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string_dataframe,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_string # Anticipated: FALSE
+# Example 8: rda file 2 has a different string value#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_string = system.file("different_string.rda",package="reproducibleCalculationTools")#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string)#
+comparison_with_different_string # Anticipated: FALSE#
+# The string cannot be converted to numerical but this shouldn't interfere#
+comparison_with_different_string=compare_rda_contents(path_base,path_different_string,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_string # Anticipated: FALSE
+#Example 7: rda file 2 has a different entry for a numerical variable, but allow for different levels of relative tolerance#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
+comparison_with_different_number_large_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=0.2,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_number_large_tolerance # Anticipated: TRUE#
+#
+comparison_with_different_number_small_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_number_small_tolerance # Anticipated: FALSE
+comparison_with_different_number_small_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_number_small_tolerance
+#Example 6: rda file 2 has a different entry for a numerical variable, but allow for different levels of relative tolerance#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
+comparison_with_different_number_large_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=0.2,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_number_large_tolerance # Anticipated: TRUE#
+#
+comparison_with_different_number_small_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=1e-6,relative_tolerance_evaluation=TRUE)#
+comparison_with_different_number_small_tolerance # Anticipated: FALSE
+#Example 5: rda file 2 has a different entry for a numerical variable, but allow for different levels of absolute tolerance#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
+comparison_with_different_number_large_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=0.7)#
+comparison_with_different_number_large_tolerance # Anticipated: TRUE#
+#
+comparison_with_different_number_small_tolerance=compare_rda_contents(path_base,path_different_number,numerical_tolerance=1e-10)#
+comparison_with_different_number_small_tolerance # Anticipated: FALSE
+#Example 4: rda file 2 has a different entry for a numerical variable#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_different_number = system.file("different_single_number.rda",package="reproducibleCalculationTools")#
+comparison_with_different_number=compare_rda_contents(path_base,path_different_number)#
+comparison_with_different_number # Anticipated: FALSE
+# Example 3: Rda file 2 has one more variable, excluded during comparison#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_one_more_variable = system.file("one_more_variable.rda",package="reproducibleCalculationTools")#
+comparison_with_one_more_variable=compare_rda_contents(path_base,path_one_more_variable,exclude_variables="anotherNumber")#
+comparison_with_one_more_variable # Anticipated: TRUE
+# Example 2: Rda file 2 has one more variable#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+path_one_more_variable = system.file("one_more_variable.rda",package="reproducibleCalculationTools")#
+comparison_with_one_more_variable=compare_rda_contents(path_base,path_one_more_variable)#
+comparison_with_one_more_variable # Anticipated: FALSE
+# Example 1: Compare identical rda files#
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")#
+identical_comparison=compare_rda_contents(path_base,path_base)#
+identical_comparison # Anticipated: TRUE
+library(reproducibleCalculationTools)
+value_comparison("the same","the same")
+value_comparison("the same","not the same")
+value_comparison("the same","the same",verbose=FALSE)
+value_comparison("the same","not the same",verbose=FALSE)
+value_comparison(rep("the same",5),rep("the same",5),verbose=FALSE)
+value_comparison(rep("the same",5),rep("the same",5),verbose=FALSE) # Anticipated: TRUE#
+value_comparison(rep("the same",5),rep("the same",4),verbose=FALSE) # Anticipated: FALSE
+value_comparison(rep("the same",5),rep("the same",5),verbose=FALSE) # Anticipated: TRUE#
+value_comparison(rep("the same",5),rep("the same",4),verbose=FALSE) # Anticipated: FALSE#
+value_comparison(rep("the same",5),c(rep("the same",4),"not the same"),verbose=FALSE) # Anticipated: FALSE
+value_comparison(4,"4",numerical_tolerance=1e-6)
+value_comparison(4,"4",numerical_tolerance=1e-6,verbose=FALSE) # Explicit attempt at numerical conversion
+value_comparison(4,"4") # Anticipated FALSE, without numerical tolerance, strings are considered in principle different from corresponding numbers
+value_comparison(4,"4") # Anticipated TRUE, the function tries to see whether the values could not be converted to numerical
+path_base = system.file("data_to_compare.rda",package="reproducibleCalculationTools")
 load(path_base)
-aDataframe
-aDataframe[5,1]
-aDataframe[5,1]="not the same"
-save(file="string_change_in_dataframe.rda",list=c("aDataframe","aNumber","aString"))
+ls
+ls()
+aNumber
+aNumber="5.3942"
+value_comparison(aNumber,5.3942)
 load(path_base)
-aDataframe
-aDataframe$extracolumn=NA
-aDataframe
-save(file="extra_column_in_dataframe.rda",list=c("aDataframe","aNumber","aString"))
+value_comparison(aNumber,"5.3942")
+aNumber="5.3942"
+save("number_as_string.rda",list=c("aDataframe" ,"aNumber" ,    "aString"))
+save(file="number_as_string.rda",list=c("aDataframe" ,"aNumber" ,    "aString"))
